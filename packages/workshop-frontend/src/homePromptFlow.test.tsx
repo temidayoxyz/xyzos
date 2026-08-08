@@ -55,7 +55,8 @@ describe("Home prompt route flow", () => {
   afterEach(async () => {
     await act(async () => root?.unmount());
     container?.remove();
-    localStorage.clear();
+    // Fork note: some jsdom environments expose localStorage without `clear`; guard it.
+    localStorage.clear?.();
     testState.seeds.length = 0;
     vi.clearAllMocks();
   });

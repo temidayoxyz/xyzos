@@ -8,7 +8,10 @@ describe("MCP_BASE_TYPES", () => {
     // `base-types.ts` exists only because a Worker's Text module rule cannot resolve an import across
     // a package boundary. `types.d.ts` is the copy TypeScript actually checks, so if they diverge the
     // agents get a type surface nobody reviewed. Editing one and not the other fails here.
-    const authoritative = readFileSync(join(import.meta.dirname, "../src/types.d.ts"), "utf8");
+    // Fork note: normalize CRLF (git autocrlf on Windows checkouts) so the comparison is
+    // line-ending agnostic.
+    const authoritative = readFileSync(join(import.meta.dirname, "../src/types.d.ts"), "utf8")
+        .replace(/\r\n/g, "\n");
     expect(MCP_BASE_TYPES).toBe(authoritative);
   });
 });
