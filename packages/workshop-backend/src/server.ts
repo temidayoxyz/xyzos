@@ -235,7 +235,7 @@ class AuthenticatedApiImpl extends RpcTarget implements AuthenticatedApi {
       if (started && !closed) {
         // this.ctx.abort() would be nicer here, but it is still marked experimental in the
         // workers runtime.
-        this.abortSession(new Error("lost connection to workspace DO"));
+        this.abortSession(new Error(`lost connection to workspace DO (gadget ${id})`));
       }
     }
 
@@ -846,6 +846,8 @@ export default {
       let resp: Response | undefined;
       let aborted = false;
       let abortSession = (reason: Error) => {
+        // Closing the socket fails no invocation, so nothing else logs this.
+        logger.warn("aborting api session", { event: "session.abort", error: reason });
         aborted = true;
         resp?.webSocket?.close();
       };

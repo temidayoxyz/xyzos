@@ -1115,6 +1115,10 @@
         "head_sampling_rate": 1,
         "logs": {
           "invocation_logs": false
+        },
+        "traces": {
+          "enabled": true,
+          "head_sampling_rate": 0.5
         }
       },
       "vars": {
