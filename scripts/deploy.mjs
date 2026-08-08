@@ -69,10 +69,23 @@ function runWrangler(args, opts = {}) {
   return run("pnpm", ["exec", "wrangler", ...args], { ...opts, allowInDryRun: true });
 }
 
-function parseJsonOutput(text, label) {
-  const match = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
-  if (!match) throw new Error(`Could not parse ${label} output: ${text.slice(0, 200)}`);
-  return JSON.parse(match[0]);
+// Cloudflare REST API call (used for KV/R2 management, whose wrangler CLI flags vary by
+// version). Returns the parsed JSON body. Throws with the API message on failure.
+function cfApi(accountId, path, opts = {}) {
+  const token = process.env.CLOUDFLARE_API_TOKEN;
+  const curlArgs = [
+    "-s", "-X", opts.method ?? "GET",
+    `https://api.cloudflare.com/client/v4/accounts/${accountId}${path}`,
+    "-H", `Authorization: Bearer ${token}`,
+    ...(opts.body ? ["-H", "Content-Type: application/json", "-d", JSON.stringify(opts.body)] : []),
+  ];
+  const out = execFileSync("curl", curlArgs, { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
+  const parsed = JSON.parse(out);
+  if (!parsed.success) {
+    const errors = (parsed.errors ?? []).map(e => e.message).join("; ");
+    throw new Error(`Cloudflare API ${opts.method ?? "GET"} ${path} failed: ${errors || "unknown error"}`);
+  }
+  return parsed;
 }
 
 // ---------------------------------------------------------------------------
@@ -122,7 +135,9 @@ const SHARING_DOMAIN = process.env.SHARING_DOMAIN ?? "xyz-os";
 function resolveAccountId() {
   if (process.env.CLOUDFLARE_ACCOUNT_ID) return process.env.CLOUDFLARE_ACCOUNT_ID;
   const whoami = runWrangler(["whoami", "--format", "json"]);
-  const info = parseJsonOutput(whoami, "wrangler whoami");
+  const match = whoami.match(/(\{[\s\S]*\})/);
+  if (!match) throw new Error("Could not parse `wrangler whoami` output; set CLOUDFLARE_ACCOUNT_ID.");
+  const info = JSON.parse(match[0]);
   const accounts = info.account ?? [];
   if (accounts.length === 1) return accounts[0].id;
   if (accounts.length === 0) {
@@ -161,24 +176,24 @@ function buildPrerequisites() {
 // ---------------------------------------------------------------------------
 
 function ensureKvNamespace(title, accountId) {
-  const list = runWrangler(["kv", "namespace", "list", "--format", "json"]);
-  const namespaces = parseJsonOutput(list, "kv namespace list");
+  const namespaces = cfApi(accountId, "/storage/kv/namespaces?per_page=100").result ?? [];
   const existing = namespaces.find(ns => ns.title === title);
   if (existing) return existing.id;
-  const created = runWrangler(["kv", "namespace", "create", title, "--format", "json"]);
-  const result = parseJsonOutput(created, "kv namespace create");
-  const id = result.result?.id ?? result.id;
+  const created = cfApi(accountId, "/storage/kv/namespaces", {
+    method: "POST",
+    body: { title },
+  });
+  const id = created.result?.id;
   if (!id) throw new Error(`Could not read created KV namespace id for "${title}".`);
   console.log(`created KV namespace "${title}" -> ${id}`);
   return id;
 }
 
 function ensureR2Bucket(accountId) {
-  const list = runWrangler(["r2", "bucket", "list", "--format", "json"]);
-  const buckets = parseJsonOutput(list, "r2 bucket list");
+  const buckets = cfApi(accountId, "/r2/buckets?per_page=100").result?.buckets ?? [];
   const existing = buckets.find(b => b.name === R2_BUCKET);
   if (existing) return R2_BUCKET;
-  runWrangler(["r2", "bucket", "create", R2_BUCKET]);
+  cfApi(accountId, "/r2/buckets", { method: "POST", body: { name: R2_BUCKET } });
   console.log(`created R2 bucket "${R2_BUCKET}"`);
   return R2_BUCKET;
 }
