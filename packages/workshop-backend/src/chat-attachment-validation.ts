@@ -25,6 +25,8 @@ const CONTENT_SIGNATURES = new Map<string, readonly (number | null)[]>([
 const isTextOrImageMime = (mimeType: string) =>
   isTextLikeAttachmentMimeType(mimeType) || IMAGE_SIGNATURES.has(mimeType);
 
+const isTextMime = (mimeType: string) => isTextLikeAttachmentMimeType(mimeType);
+
 const isTextImageOrPdfMime = (mimeType: string) =>
   isTextOrImageMime(mimeType) || mimeType === PDF_MIME_TYPE;
 
@@ -32,12 +34,18 @@ const isTextImageOrPdfMime = (mimeType: string) =>
 // image part and are bridged to a provider's native document input where one exists: Gemini takes
 // application/pdf inline data as-is, and Anthropic/OpenAI payloads are rewritten in flight (see
 // chat-attachment-pdf.ts). Workers AI and Ollama chat endpoints have no document input at all.
+// Fork additions: DeepSeek and NVIDIA NIM catalogs are text-only; OpenRouter and Moonshot AI
+// (Kimi) models take text + images per their pi-ai catalog entries.
 const ATTACHMENT_SUPPORT_BY_PROVIDER = {
   anthropic: isTextImageOrPdfMime,
   openai: isTextImageOrPdfMime,
   google: isTextImageOrPdfMime,
   cloudflare: isTextOrImageMime,
   ollama: isTextOrImageMime,
+  deepseek: isTextMime,
+  nvidia: isTextMime,
+  openrouter: isTextImageOrPdfMime,
+  moonshotai: isTextImageOrPdfMime,
 } satisfies Record<AiModelProvider, (mimeType: string) => boolean>;
 
 function sanitizeChatAttachmentMimeType(mimeType: string | undefined): string {

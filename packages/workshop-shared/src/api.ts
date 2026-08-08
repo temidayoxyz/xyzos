@@ -671,7 +671,7 @@ export const MAX_SITE_NAME_LENGTH = 40;
 
 // What this deployment calls itself when the admin has not set a custom `siteName`. Also the
 // product's own name, so it appears in prose the server and UI address to the user.
-export const DEFAULT_SITE_NAME = "Cloudflare OS";
+export const DEFAULT_SITE_NAME = "XYZ OS";
 
 // The name to display for this deployment. Accepts an unset or not-yet-loaded `siteName` so both
 // the server (reading admin config) and the client (reading ServerConfig) resolve it identically.
@@ -691,7 +691,7 @@ export type AdminSettingsView = {
   signupsEnabled: boolean;
   // Site name shown next to the top-bar logo ("" falls back to DEFAULT_SITE_NAME).
   siteName: string;
-  /** Custom deployment logo, or undefined to use the default Cloudflare OS mark. */
+  /** Custom deployment logo, or undefined to use the default XYZ OS mark. */
   siteLogo?: AvatarImage;
   // Agent system-prompt instructions ("" when unset).
   instanceInstructions: string;
@@ -759,7 +759,7 @@ export interface AdminApi {
   setSiteName(name: string): Promise<void>;
 
   /** Set the deployment logo from browser-rasterized PNG bytes and return its canonical public
-   * image, or undefined after reset. Pass null to restore the default Cloudflare OS mark. The
+   * image, or undefined after reset. Pass null to restore the default XYZ OS mark. The
    * caller must supply decodable PNG data; the server enforces its header, size, and dimensions. */
   setSiteLogo(data: Uint8Array | null): Promise<AvatarImage | undefined>;
 
@@ -869,7 +869,7 @@ export type ServerConfig = {
   // DEFAULT_SITE_NAME.
   siteName: string;
 
-  /** Custom deployment logo, or undefined to use the default Cloudflare OS mark. */
+  /** Custom deployment logo, or undefined to use the default XYZ OS mark. */
   siteLogo?: AvatarImage;
 
   // Deployment-wide top-bar notice (centered text in the top navigation bar). Empty when none is set.
@@ -916,8 +916,11 @@ export type CloudflareAccountOption = {
   accountName: string;
 };
 
-// Supported AI providers.
-export type AiModelProvider = "openai" | "anthropic" | "google" | "cloudflare" | "ollama";
+// Supported AI providers. "deepseek", "nvidia", "openrouter", and "moonshotai" are fork
+// additions; the upstream union was "openai" | "anthropic" | "google" | "cloudflare" | "ollama".
+export type AiModelProvider =
+  | "openai" | "anthropic" | "google" | "cloudflare" | "ollama"
+  | "deepseek" | "nvidia" | "openrouter" | "moonshotai";
 
 // Information about the AI gateway configuration. Returned by `AuthenticatedApi.getAiConfig()`.
 export type AiGatewayInfo = {
@@ -982,6 +985,41 @@ export const SUGGESTED_MODELS: Record<
   },
   "google": {
     "gemini-3.6-flash": {name: "Gemini 3.6 Flash", contextWindow: 1048576},
+  },
+  // Fork additions: DeepSeek, NVIDIA NIM, OpenRouter, Moonshot AI (Kimi). Context windows come
+  // from pi-ai's provider catalogs, which also carry cost and compat metadata for these models.
+  "deepseek": {
+    "deepseek-v4-pro": {name: "DeepSeek V4 Pro", contextWindow: 1000000},
+    "deepseek-v4-flash": {name: "DeepSeek V4 Flash", contextWindow: 1000000},
+  },
+  "nvidia": {
+    "nvidia/nemotron-3-ultra-550b-a55b": {
+      name: "Nemotron 3 Ultra 550B (NIM)", contextWindow: 1000000,
+    },
+    "nvidia/nemotron-3-super-120b-a12b": {
+      name: "Nemotron 3 Super 120B (NIM)", contextWindow: 262144,
+    },
+    "nvidia/llama-3.3-nemotron-super-49b-v1.5": {
+      name: "Llama 3.3 Nemotron Super 49B (NIM)", contextWindow: 131072,
+    },
+    "meta/llama-3.3-70b-instruct": {
+      name: "Llama 3.3 70B Instruct (NIM)", contextWindow: 128000,
+    },
+    "openai/gpt-oss-120b": {name: "GPT-OSS 120B (NIM)", contextWindow: 128000},
+  },
+  "openrouter": {
+    "anthropic/claude-opus-5": {name: "Claude Opus 5 (OpenRouter)", contextWindow: 1000000},
+    "anthropic/claude-sonnet-5": {name: "Claude Sonnet 5 (OpenRouter)", contextWindow: 1000000},
+    "openai/gpt-5.6-sol": {name: "GPT 5.6 Sol (OpenRouter)", contextWindow: 1050000},
+    "openai/gpt-5.6-luna": {name: "GPT 5.6 Luna (OpenRouter)", contextWindow: 1050000},
+    "deepseek/deepseek-v4-pro": {name: "DeepSeek V4 Pro (OpenRouter)", contextWindow: 1048576},
+    "deepseek/deepseek-v4-flash": {name: "DeepSeek V4 Flash (OpenRouter)", contextWindow: 1048576},
+    "moonshotai/kimi-k2.7-code": {name: "Kimi K2.7 Code (OpenRouter)", contextWindow: 262144},
+  },
+  "moonshotai": {
+    "kimi-k2.7-code": {name: "Kimi K2.7 Code", contextWindow: 262144},
+    "kimi-k2.6": {name: "Kimi K2.6", contextWindow: 262144},
+    "kimi-k2.5": {name: "Kimi K2.5", contextWindow: 262144},
   },
   "ollama": {
   },

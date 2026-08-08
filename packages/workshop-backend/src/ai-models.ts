@@ -10,8 +10,12 @@ import { stream as openaiCompletionsStream } from "@earendil-works/pi-ai/api/ope
 import { stream as openaiResponsesStream } from "@earendil-works/pi-ai/api/openai-responses";
 import { ANTHROPIC_MODELS } from "@earendil-works/pi-ai/providers/anthropic.models";
 import { CLOUDFLARE_WORKERS_AI_MODELS } from "@earendil-works/pi-ai/providers/cloudflare-workers-ai.models";
+import { DEEPSEEK_MODELS } from "@earendil-works/pi-ai/providers/deepseek.models";
 import { GOOGLE_MODELS } from "@earendil-works/pi-ai/providers/google.models";
+import { MOONSHOTAI_MODELS } from "@earendil-works/pi-ai/providers/moonshotai.models";
+import { NVIDIA_MODELS } from "@earendil-works/pi-ai/providers/nvidia.models";
 import { OPENAI_MODELS } from "@earendil-works/pi-ai/providers/openai.models";
+import { OPENROUTER_MODELS } from "@earendil-works/pi-ai/providers/openrouter.models";
 import { ApprovalQueue, Gatekeeper, ResourceDescription, stripTrailingSlashes } from '@gadgets/workshop-shared/gatekeeper';
 import { LanguageModelBinding } from "./ai-model-binding";
 import AI_MODEL_BINDING_TYPES from "./ai-model-binding.txt";
@@ -123,6 +127,12 @@ function catalogModel(provider: AiModelConfig["provider"], modelId: string): Mod
     case "openai": return (OPENAI_MODELS as Record<string, Model<Api>>)[modelId];
     case "google": return (GOOGLE_MODELS as Record<string, Model<Api>>)[modelId];
     case "cloudflare": return (CLOUDFLARE_WORKERS_AI_MODELS as Record<string, Model<Api>>)[modelId];
+    // Fork additions: DeepSeek, NVIDIA NIM, OpenRouter, Moonshot AI (Kimi) -- all cataloged in
+    // pi-ai as OpenAI-compatible providers, same as ollama (which has no catalog).
+    case "deepseek": return (DEEPSEEK_MODELS as Record<string, Model<Api>>)[modelId];
+    case "nvidia": return (NVIDIA_MODELS as Record<string, Model<Api>>)[modelId];
+    case "openrouter": return (OPENROUTER_MODELS as Record<string, Model<Api>>)[modelId];
+    case "moonshotai": return (MOONSHOTAI_MODELS as Record<string, Model<Api>>)[modelId];
     case "ollama": return undefined;
     default: return undefined;
   }
@@ -230,6 +240,38 @@ function gatewayNativeModel(config: AiModelConfig, gatewayUrl: string): Model<Ap
         cost: catalog?.cost ?? ZERO_COST,
         ...window,
         compat: workersAiCompat(catalog),
+      };
+    // Fork additions: DeepSeek and OpenRouter are served natively by Cloudflare AI Gateway
+    // under their own provider paths (same shape as the openai case above). NVIDIA NIM and
+    // Moonshot AI are not gateway providers -- in gateway mode they fall through to the
+    // "not supported through AI Gateway" error; use direct mode for those.
+    case "deepseek":
+      return {
+        id: config.model,
+        name: catalog?.name ?? config.model,
+        api: "openai-completions",
+        provider: "deepseek",
+        baseUrl: `${gatewayUrl}/deepseek`,
+        reasoning: catalog?.reasoning ?? true,
+        input: catalog?.input ?? ["text"],
+        cost: catalog?.cost ?? ZERO_COST,
+        ...window,
+        thinkingLevelMap: catalog?.thinkingLevelMap,
+        compat: catalog?.compat,
+      };
+    case "openrouter":
+      return {
+        id: config.model,
+        name: catalog?.name ?? config.model,
+        api: "openai-completions",
+        provider: "openrouter",
+        baseUrl: `${gatewayUrl}/openrouter`,
+        reasoning: catalog?.reasoning ?? true,
+        input: catalog?.input ?? ["text", "image"],
+        cost: catalog?.cost ?? ZERO_COST,
+        ...window,
+        thinkingLevelMap: catalog?.thinkingLevelMap,
+        compat: catalog?.compat,
       };
     default:
       return undefined;
@@ -475,6 +517,35 @@ function getModelViaGateway(
   });
 }
 
+// Fork additions: direct-access descriptor for a pi-catalog OpenAI-compatible provider
+// (deepseek, nvidia, openrouter, moonshotai). Known model ids use the catalog entry verbatim --
+// it carries the provider's base URL, cost, and compat flags (DeepSeek's thinking format, NIM's
+// long-poll headers, OpenRouter's routing format) -- so an apiUrl override can still point at a
+// proxy. Unknown ids (e.g. a model released after this pi version) get a synthesized descriptor
+// with the provider defaults, mirroring how catalogModel/modelTokenWindow handle unknowns.
+function directCatalogModel(
+  config: AiModelConfig,
+  provider: "deepseek" | "nvidia" | "openrouter" | "moonshotai",
+  defaults: { baseUrl: string, reasoning: boolean },
+): Model<Api> {
+  const catalog = catalogModel(provider, config.model);
+  if (catalog) {
+    return { ...catalog, baseUrl: config.apiUrl ?? catalog.baseUrl };
+  }
+  const window = modelTokenWindow(config, undefined);
+  return {
+    id: config.model,
+    name: config.model,
+    api: "openai-completions",
+    provider,
+    baseUrl: config.apiUrl ?? defaults.baseUrl,
+    reasoning: defaults.reasoning,
+    input: ["text", "image"],
+    cost: ZERO_COST,
+    ...window,
+  };
+}
+
 // Direct provider access using the credentials in the model config itself (no AI Gateway).
 function getModelDirect(config: AiModelConfig, sessionAffinity?: string): ModelHandle {
   const catalog = catalogModel(config.provider, config.model);
@@ -584,6 +655,43 @@ function getModelDirect(config: AiModelConfig, sessionAffinity?: string): ModelH
           thinkingLevelMap: catalog?.thinkingLevelMap,
           compat: catalog?.compat,
         },
+        apiKey: config.apiToken,
+        sessionAffinity,
+      });
+    // Fork additions -- see directCatalogModel for the catalog-first descriptor strategy.
+    case "deepseek":
+      return makeHandle({
+        model: directCatalogModel(config, "deepseek", {
+          baseUrl: "https://api.deepseek.com",
+          reasoning: true,
+        }),
+        apiKey: config.apiToken,
+        sessionAffinity,
+      });
+    case "nvidia":
+      return makeHandle({
+        model: directCatalogModel(config, "nvidia", {
+          baseUrl: "https://integrate.api.nvidia.com/v1",
+          reasoning: false,
+        }),
+        apiKey: config.apiToken,
+        sessionAffinity,
+      });
+    case "openrouter":
+      return makeHandle({
+        model: directCatalogModel(config, "openrouter", {
+          baseUrl: "https://openrouter.ai/api/v1",
+          reasoning: true,
+        }),
+        apiKey: config.apiToken,
+        sessionAffinity,
+      });
+    case "moonshotai":
+      return makeHandle({
+        model: directCatalogModel(config, "moonshotai", {
+          baseUrl: "https://api.moonshot.ai/v1",
+          reasoning: true,
+        }),
         apiKey: config.apiToken,
         sessionAffinity,
       });

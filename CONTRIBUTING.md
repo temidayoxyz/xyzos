@@ -1,4 +1,4 @@
-# Contributing to Cloudflare OS
+# Contributing to XYZ OS
 
 At this time, we are not seeking outside contribution.
 

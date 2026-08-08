@@ -22,6 +22,11 @@ const PROVIDER_LABELS: Record<AiModelProvider, string> = {
   google: 'Google',
   cloudflare: 'Cloudflare Workers AI',
   ollama: 'Ollama',
+  // Fork additions
+  deepseek: 'DeepSeek',
+  nvidia: 'NVIDIA NIM',
+  openrouter: 'OpenRouter',
+  moonshotai: 'Moonshot AI (Kimi)',
 }
 
 // Placeholder hinting at the shape of each provider's API token.
@@ -31,6 +36,11 @@ const API_TOKEN_PLACEHOLDERS: Record<AiModelProvider, string> = {
   google: 'AIza...',
   cloudflare: 'Cloudflare API token',
   ollama: '(optional)',
+  // Fork additions
+  deepseek: 'sk-...',
+  nvidia: 'nvapi-...',
+  openrouter: 'sk-or-...',
+  moonshotai: 'sk-...',
 }
 
 // Example used in the custom-model placeholders for providers that have no suggested models
