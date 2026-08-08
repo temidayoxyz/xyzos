@@ -123,10 +123,11 @@ const KV_BINDINGS = [
   { package: "gatekeeper-context", binding: "CONTEXT_COLLECTIONS", title: "xyz-os-context-collections" },
 ];
 
-const R2_BUCKET = process.env.XYZ_R2_BUCKET ?? "xyz-os-blueprint-content";
+const R2_BUCKET = process.env.XYZ_R2_BUCKET || "xyz-os-blueprint-content";
 
-const ADMINS = (process.env.ADMINS ?? "admin").split(",").map(s => s.trim()).filter(Boolean);
-const SHARING_DOMAIN = process.env.SHARING_DOMAIN ?? "xyz-os";
+// Note: `||` not `??` -- GitHub Actions passes empty strings for unset variables.
+const ADMINS = (process.env.ADMINS || "admin").split(",").map(s => s.trim()).filter(Boolean);
+const SHARING_DOMAIN = process.env.SHARING_DOMAIN || "xyz-os";
 
 // ---------------------------------------------------------------------------
 // 0. Account resolution (skipped in dry-run).
@@ -223,7 +224,7 @@ function generateConfigs(kvIds, bucketName) {
     const config = readConfig("workshop-backend");
     config.services = [];
     for (const gk of gatekeepers) {
-      const binding = { binding: bindingName(gk), service: gk.name, entrypoint: "GatekeeperVendor" };
+      const binding = { binding: bindingName(gk), service: gk, entrypoint: "GatekeeperVendor" };
       if (gk === "gatekeeper-context") binding.props = { sharingDomain: SHARING_DOMAIN };
       config.services.push(binding);
     }
@@ -252,7 +253,7 @@ function generateConfigs(kvIds, bucketName) {
     const config = readConfig("router");
     config.services = config.services ?? [];
     for (const gk of gatekeepers) {
-      config.services.push({ binding: bindingName(gk), service: gk.name });
+      config.services.push({ binding: bindingName(gk), service: gk });
     }
     writeProdConfig("router", config);
   }
