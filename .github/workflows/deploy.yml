@@ -52,6 +52,9 @@ jobs:
       - name: Lint and type-check
         run: pnpm lint
 
+      - name: Build typed-storage (tests import its dist output)
+        run: pnpm --filter @gadgets/typed-storage build
+
       - name: Unit tests
         run: pnpm test
 
